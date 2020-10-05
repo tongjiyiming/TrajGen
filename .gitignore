@@ -1,3 +1,14 @@
+.DS_Store
+.idea/
+Gaussian-Mixture-Variational-Sequence-AutoEncoder/
+igmm_gan/
+mnist/
+good_results/
+logs/
+dataset/pkdd/
+dataset/tdrive/
+dataset/gowalla/
+
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]
