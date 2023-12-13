@@ -1,3 +1,5 @@
+checkpoints/
+trajgen/
 .DS_Store
 .idea/
 Gaussian-Mixture-Variational-Sequence-AutoEncoder/

@@ -201,6 +201,7 @@ class Trainer(object):
         return mde_list
 
     def post_evaluate(self, data_name, angle_thres, precede_segment_thres):
+        ### compute MMD metric, plot heat maps
         self.model.eval()
         ### mean distance error
         mde_list = []
@@ -580,30 +581,30 @@ class Trainer(object):
         return times
 
 if __name__ == "__main__":
-    # isTest = True
-    isTest = False
+    isTest = True
+    # isTest = False
     # reload = True
     reload = False
 
-    # doEval = True
-    doEval = False
+    doEval = True
+    # doEval = False
 
     data_name = 'pol'
     # data_name = 'gowalla'
     # data_name = 'pkdd'
     # data_name = 'tdrive'
 
-    # model_name = 'dvsae'
-    model_name = 'fdvsae'
+    model_name = 'dvsae'
+    # model_name = 'fdvsae'
     # model_name = 'vsae_y'
     # model_name = 'vsae_z'
     # model_name = 'lstm'
 
-    useConstraints = 'useConstraint'
-    # useConstraints = 'noConstraint'
+    # useConstraints = 'useConstraint'
+    useConstraints = 'noConstraint'
 
-    device = torch.device('cuda:0')
-    # device = torch.device('cpu')
+    # device = torch.device('cuda:0')
+    device = torch.device('cpu')
 
     if isTest:
         print('testing run')
@@ -753,7 +754,7 @@ if __name__ == "__main__":
     elif model_name == 'lstm':
         model =LSTM(f_dim=f_dim, z_dim=z_dim, traj_len=traj_len, factorised=False, device=device,
                               encode_dims=encode_dims, decode_dims=decode_dims)
-
+    print('initialize trainer ...')
     trainer = Trainer(model, traj_train, traj_test, train_loader, test_loader, model_name=model_name, file_prefix=file_prefix,
                       data_log_folder=data_log_folder,batch_size=batch_size, epochs=epochs,
                       spatial_constraint_func=spatial_constraint_func, beta=beta, alpha=alpha,
@@ -761,10 +762,10 @@ if __name__ == "__main__":
                       learning_rate=learning_rate, device=device)
     print('checkpoints', checkpoints)
 
-    if doEval:
+    if doEval and model_name != 'lstm':
         trainer.load_checkpoint()
         print('angle threshold:', angle_thres)
-        # trainer.post_evaluate(data_name=data_name, angle_thres=angle_thres, precede_segment_thres=precede_segment_thres)
+        trainer.post_evaluate(data_name=data_name, angle_thres=angle_thres, precede_segment_thres=precede_segment_thres)
 
         # trainer.recon_traj(np.random.choice(len(traj_test)), savefig=True)
 
@@ -807,7 +808,12 @@ if __name__ == "__main__":
                     test_f = test_f_list[i]
                     test_z = test_z_list[j]
                     test_f_expand = test_f.unsqueeze(1).expand(1, traj_len, f_dim)
-                    test_zf = torch.cat((test_z, test_f_expand), dim=2)
+                    if model_name == 'vsae_y':
+                        test_zf = test_f_expand
+                    elif model_name == 'vsae_z':
+                        test_zf = test_z
+                    else:
+                        test_zf = torch.cat((test_z, test_f_expand), dim=2)
                     recon_traj = trainer.model.decode_trajs(test_zf)
                     recon_traj = recon_traj.cpu().numpy()
 
@@ -833,9 +839,11 @@ if __name__ == "__main__":
         print("end evaluation")
     else:
         if reload:
+            print('reload checkpoint ...')
             trainer.load_checkpoint()
             trainer.train_model()
         else:
+            print('start training ...')
             t1 = time.time()
             trainer.train_model()
             t2 = time.time()
