@@ -273,6 +273,18 @@ def compute_angle(seq):
     # print('angles.min(), angles.max()', angles.min(), angles.max())
     return angles
 
+def compute_angle(seq):
+    # seq = torch.tensor(seq, device=device)
+    # batch_size, traj_len, n_coods = seq.size()
+    cosine_scores = compute_cosine(seq)
+    if cosine_scores.is_cuda: cosine_scores = cosine_scores.data.cpu().numpy()
+    else: cosine_scores = cosine_scores.data.numpy()
+    cosine_scores[cosine_scores < -1] = -1
+    cosine_scores[cosine_scores > 1] = 1
+    # print('cosine_scores.min(), cosine_scores.max()', cosine_scores.min(), cosine_scores.max())
+    angles = np.arccos(cosine_scores) / np.pi * 180
+    # print('angles.min(), angles.max()', angles.min(), angles.max())
+    return angles
 def compute_segment_length(seq):
     batch_size, traj_len, n_coods = seq.size()
     # get direction vectors

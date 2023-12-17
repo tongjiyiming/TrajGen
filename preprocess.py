@@ -287,21 +287,27 @@ def plots_pkdd(post_traj_list, data_log_folder, file_prefix):
     succeeding_segments = np.array(succeeding_segments)
     both_segments = np.array(both_segments)
     angles = np.array(angles)
-    dist_thres, angle_thres = 166, 30 # 60 km/h
+    dist_thres, angle_thres = 166, 150 # 60 km/h
+    print(preceding_segments)
+    print(angles)
+    ratio = len(np.where((preceding_segments > dist_thres) \
+                         & (angles > angle_thres))[0]) / len(preceding_segments)
+    print('''ratio that preceding segments are larger than {}
+          and angle are larger than {} is {}'''.format(dist_thres, angle_thres, ratio))
     ratio = len(np.where((preceding_segments > dist_thres) & (succeeding_segments > dist_thres) \
-                         & (angles < angle_thres))[0]) / len(preceding_segments)
+                         & (angles > angle_thres))[0]) / len(preceding_segments)
     print('''ratio that preceding and suceeding segments are both larger than {}
-          and angle are smaller than {} is {}'''.format(dist_thres, angle_thres, ratio))
-    dist_thres, angle_thres = 111, 30 #  40 km/h
+          and angle are larger than {} is {}'''.format(dist_thres, angle_thres, ratio))
+    dist_thres, angle_thres = 111, 150 #  40 km/h
     ratio = len(np.where((preceding_segments > dist_thres) & (succeeding_segments > dist_thres) \
-                         & (angles < angle_thres))[0]) / len(preceding_segments)
+                         & (angles > angle_thres))[0]) / len(preceding_segments)
     print('''ratio that preceding and suceeding segments are both larger than {}
-          and angle are smaller than {} is {}'''.format(dist_thres, angle_thres, ratio))
-    dist_thres, angle_thres = 111, 60 # 40 km/h
+          and angle are larger than {} is {}'''.format(dist_thres, angle_thres, ratio))
+    dist_thres, angle_thres = 111, 120 # 40 km/h
     ratio = len(np.where((preceding_segments > dist_thres) & (succeeding_segments > dist_thres) \
-                         & (angles < angle_thres))[0]) / len(preceding_segments)
+                         & (angles > angle_thres))[0]) / len(preceding_segments)
     print('''ratio that preceding and suceeding segments are both larger than {}
-          and angle are smaller than {} is {}'''.format(dist_thres, angle_thres, ratio))
+          and angle are larger than {} is {}'''.format(dist_thres, angle_thres, ratio))
 
     print('save validity heatmap to files in:', data_log_folder, file_prefix)
     # preceding angle v.s. angle
@@ -482,13 +488,13 @@ if __name__ == "__main__":
 
     crs = "EPSG:4326"
 
-    # data_name = 'pkdd'
+    data_name = 'pkdd'
     # data_name = 'tdrive'
-    data_name = 'pol'
+    # data_name = 'pol'
     # data_name = 'gowalla'
 
     if data_name == 'pkdd':
-        data = pd.read_csv('dataset/pkdd/train.csv')
+        data = pd.read_csv('/media/liming/Liming1/llm_porto_results/taxi+service+trajectory+prediction+challenge+ecml+pkdd+2015/train.csv')
         local_crs = "EPSG:3763"
         dist_thres_low = 10
         dist_thres_high = 1000
@@ -519,8 +525,10 @@ if __name__ == "__main__":
         # # post_traj_list.extend(preprocess_pkdd(np.random.randint(1, len(data)+1)))
         # # post_traj_list.extend(preprocess_pkdd(1482810))
         # post_traj_list.extend(preprocess_pkdd(2472))
-
-        plots_pkdd(post_traj_list, data_log_folder='./logs/pkdd/', file_prefix='pkdd_spatial_validity_real')
+        data_log_folder = './logs/pkdd/'
+        if not os.path.isdir(data_log_folder):
+            os.mkdir(data_log_folder)
+        plots_pkdd(post_traj_list, data_log_folder=data_log_folder, file_prefix='pkdd_spatial_validity_real')
 
         # save to fixed length trajectories for training
         traj_len = 32
