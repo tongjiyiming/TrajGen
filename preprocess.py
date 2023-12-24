@@ -287,9 +287,7 @@ def plots_pkdd(post_traj_list, data_log_folder, file_prefix):
     succeeding_segments = np.array(succeeding_segments)
     both_segments = np.array(both_segments)
     angles = np.array(angles)
-    dist_thres, angle_thres = 166, 150 # 60 km/h
-    print(preceding_segments)
-    print(angles)
+    dist_thres, angle_thres = 166, 150 # 60 km
     ratio = len(np.where((preceding_segments > dist_thres) \
                          & (angles > angle_thres))[0]) / len(preceding_segments)
     print('''ratio that preceding segments are larger than {}
