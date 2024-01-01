@@ -492,16 +492,17 @@ if __name__ == "__main__":
     # data_name = 'gowalla'
 
     if data_name == 'pkdd':
-        data = pd.read_csv('/media/liming/Liming1/llm_porto_results/taxi+service+trajectory+prediction+challenge+ecml+pkdd+2015/train.csv')
+
         local_crs = "EPSG:3763"
         dist_thres_low = 10
         dist_thres_high = 1000
 
-        # remove not moving points
-        print('preprocessing {} data'.format(len(data)))
         if isTest: post_traj_file = 'dataset/{}/{}_post_traj_file_test.bin'.format(data_name, data_name)
         else: post_traj_file = 'dataset/{}/{}_post_traj_file.bin'.format(data_name, data_name)
         if not os.path.isfile(post_traj_file):
+            data = pd.read_csv(
+                '/media/liming/Liming1/TrajGen/dataset/taxi+service+trajectory+prediction+challenge+ecml+pkdd+2015/train.csv')
+            print('loading raw {} data'.format(len(data)))
             pool = Pool()
             t0 = time.time()
             if isTest: tmp_list = pool.map(preprocess_pkdd, range(1000))
@@ -618,6 +619,9 @@ if __name__ == "__main__":
         data_name = 'tdrive'
         num_users = 10357
         path = 'dataset/tdrive/taxi_log_2008_by_id/'
+        log_path = './logs/tdrive'
+        if not os.path.isdir(log_path):
+            os.makedirs(log_path)
         # local_crs = "EPSG:21460"
         local_crs = "EPSG:4796"
         x_low = 387941
@@ -676,6 +680,10 @@ if __name__ == "__main__":
             train_traj_file = 'dataset/{}/{}_training_traj_file.bin'.format(data_name, data_name)
             test_traj_file = 'dataset/{}/{}_testing_traj_file.bin'.format(data_name, data_name)
             params_file = 'dataset/{}/{}_params.bin'.format(data_name, data_name)
+
+        if isTest: post_traj_file = 'dataset/{}/{}_post_traj_file_test.bin'.format(data_name, data_name)
+        else: post_traj_file = 'dataset/{}/{}_post_traj_file.bin'.format(data_name, data_name)
+
         if not os.path.isfile(params_file):
             used_traj_list = []
             for traj in post_traj_list:
@@ -730,26 +738,24 @@ if __name__ == "__main__":
             with open(test_traj_file, 'rb') as f:
                 test_traj_list = pickle.load(f)
                 f.close()
-        # # cut by angles
-        # if isTest: post_traj_file = 'dataset/{}/{}_post_traj_cut_angle_file_test.bin'.format(data_name, data_name)
-        # else: post_traj_file = 'dataset/{}/{}_post_traj_cut_angle_file.bin'.format(data_name, data_name)
-        # if not os.path.isfile(post_traj_file):
-        #     pool = Pool()
-        #     t0 = time.time()
-        #     tmp_list = pool.map(preprocess_cut_traj, post_traj_list)
-        #     print('use time:', time.time() - t0)
-        #     post_traj_list = []
-        #     for x in tmp_list:
-        #         if len(x) > 0:
-        #             post_traj_list.extend(x)
-        #     with open(post_traj_file, 'wb') as f:
-        #         pickle.dump(post_traj_list, f)
-        #         f.close()
-        # else:
-        #     print('load a saved trajectory file: {}'.format(post_traj_file))
-        #     with open(post_traj_file, 'rb') as f:
-        #         post_traj_list = pickle.load(f)
-        #         f.close()
+
+        if not os.path.isfile(post_traj_file):
+            pool = Pool()
+            t0 = time.time()
+            tmp_list = pool.map(preprocess_cut_traj, post_traj_list)
+            print('use time:', time.time() - t0)
+            post_traj_list = []
+            for x in tmp_list:
+                if len(x) > 0:
+                    post_traj_list.extend(x)
+            with open(post_traj_file, 'wb') as f:
+                pickle.dump(post_traj_list, f)
+                f.close()
+        else:
+            print('load a saved trajectory file: {}'.format(post_traj_file))
+            with open(post_traj_file, 'rb') as f:
+                post_traj_list = pickle.load(f)
+                f.close()
     elif data_name == 'pol':
         if isTest:
             train_traj_file = 'dataset/{}/{}_training_traj_file_test.bin'.format(data_name, data_name)
@@ -759,6 +765,10 @@ if __name__ == "__main__":
             train_traj_file = 'dataset/{}/{}_training_traj_file.bin'.format(data_name, data_name)
             test_traj_file = 'dataset/{}/{}_testing_traj_file.bin'.format(data_name, data_name)
             params_file = 'dataset/{}/{}_params.bin'.format(data_name, data_name)
+
+        if isTest: post_traj_file = 'dataset/{}/{}_post_traj_file_test.bin'.format(data_name, data_name)
+        else: post_traj_file = 'dataset/{}/{}_post_traj_file.bin'.format(data_name, data_name)
+
         if not os.path.isfile(params_file):
             path = 'dataset/pol/pol_checkin.tsv'
             polyline_col = 'POLYLINE'
@@ -807,6 +817,9 @@ if __name__ == "__main__":
             with open(test_traj_file, 'wb') as f:
                 pickle.dump(test_traj_list, f)
                 f.close()
+            with open(post_traj_file, 'wb') as f:
+                pickle.dump(used_traj_list, f)
+                f.close()
         else:
             print('load a saved train/test trajectory file: {} / {}'.format(train_traj_file, test_traj_file))
             with open(params_file, 'rb') as f:
@@ -818,6 +831,9 @@ if __name__ == "__main__":
             with open(test_traj_file, 'rb') as f:
                 test_traj_list = pickle.load(f)
                 f.close()
+            with open(post_traj_file, 'wb') as f:
+                used_traj_list = pickle.load(f)
+                f.close()
     elif data_name == 'gowalla':
         if isTest:
             train_traj_file = 'dataset/{}/{}_training_traj_file_test.bin'.format(data_name, data_name)
@@ -827,8 +843,12 @@ if __name__ == "__main__":
             train_traj_file = 'dataset/{}/{}_training_traj_file.bin'.format(data_name, data_name)
             test_traj_file = 'dataset/{}/{}_testing_traj_file.bin'.format(data_name, data_name)
             params_file = 'dataset/{}/{}_params.bin'.format(data_name, data_name)
+
+        if isTest: post_traj_file = 'dataset/{}/{}_post_traj_file_test.bin'.format(data_name, data_name)
+        else: post_traj_file = 'dataset/{}/{}_post_traj_file.bin'.format(data_name, data_name)
+
         if not os.path.isfile(params_file):
-            path = 'dataset/gowalla/loc-gowalla_totalCheckins.txt'
+            path = 'dataset/gowalla/Gowalla_totalCheckins.txt'
             polyline_col = 'POLYLINE'
             ID_col = 'ID'
             X_col = 'X'
@@ -893,6 +913,9 @@ if __name__ == "__main__":
             with open(test_traj_file, 'wb') as f:
                 pickle.dump(test_traj_list, f)
                 f.close()
+            with open(post_traj_file, 'wb') as f:
+                pickle.dump(used_traj_list, f)
+                f.close()
         else:
             print('load a saved train/test trajectory file: {}  {}'.format(train_traj_file, test_traj_file))
             with open(params_file, 'rb') as f:
@@ -903,6 +926,9 @@ if __name__ == "__main__":
                 f.close()
             with open(test_traj_file, 'rb') as f:
                 test_traj_list = pickle.load(f)
+                f.close()
+            with open(post_traj_file, 'rb') as f:
+                used_traj_list = pickle.load(f)
                 f.close()
     print('train_traj_list.shape', train_traj_list.shape)
     print('test_traj_list.shape', test_traj_list.shape)
