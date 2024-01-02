@@ -322,6 +322,8 @@ def plots_pkdd(post_traj_list, data_log_folder, file_prefix):
     plt.close()
 
     # preceding segment v.s. angle
+    print(preceding_segments[:10])
+    print(angles[:10])
     h, _, _ = np.histogram2d(preceding_segments, angles, bins=[500, 360], range=[[0, 500], [0, 180]])
     plt.figure(figsize=(4, 3))
     # ax = plt.imshow(h, cmap='Blues')

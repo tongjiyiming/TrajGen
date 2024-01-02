@@ -12,6 +12,7 @@ from multiprocessing import Pool
 
 from preprocess import plots_tdrive, plot_one_traj
 from utils import *
+from pkdd_evaluate import novelty_score
 
 gen_line_col = 'centroids'
 
@@ -125,6 +126,16 @@ if __name__=="__main__":
     else:
         data = pd.read_csv(generated_data_file)
     # data.columns = [x if x != 'centroids' else 'POLYLINE' for x in data.columns]
+
+    print('*' * 10, 'read tokens sequences of real LLM dataset...')
+    real_data_file = f'{data_root}/dataset/{model_name}_{data_name}_data/data_centroids.csv'
+    if is_test:
+        real_data = pd.read_csv(real_data_file, nrows=10)
+    else:
+        real_data = pd.read_csv(real_data_file)
+
+    novelty_score = novelty_score(real_data, data)
+    print('generated Novelty score : {}'.format(novelty_score))
 
     print('-'*8, 'preprocess all generated traj')
     pool = Pool(n_jobs)

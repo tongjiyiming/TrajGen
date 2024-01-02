@@ -12,6 +12,7 @@ from multiprocessing import Pool
 
 from preprocess import plots_tdrive, plot_one_traj
 from utils import *
+from pkdd_evaluate import novelty_score
 
 gen_line_col = 'centroids'
 
@@ -122,82 +123,93 @@ if __name__=="__main__":
         data = pd.read_csv(generated_data_file)
     # data.columns = [x if x != 'centroids' else 'POLYLINE' for x in data.columns]
     print('generated trajectory data\n', len(data))
-    print('-'*8, 'preprocess all generated traj')
-    pool = Pool(n_jobs)
-    t0 = time.time()
-    tmp_list_preprocess_gen = pool.map(preprocess_generated_tdrive, [data.loc[ind, gen_line_col] for ind in range(len(data))])
-    pool.close()
-    print('preprocess gen data use time:', time.time() - t0)
-    post_gen_traj_list = [x for x in tmp_list_preprocess_gen if x.shape[0] > 0]
-    post_gen_traj_list = random.sample(post_gen_traj_list, n_subset)
 
-    ### plot real traj
-    print('-'*8, 'plot and analysis real data')
-    plots_tdrive(post_traj_list, data_log_folder=data_log_folder, file_prefix=f'{data_name}_spatial_validity_real')
+    print('*' * 10, 'read tokens sequences of real LLM dataset...')
+    real_data_file = f'{data_root}/dataset/{model_name}_{data_name}_data/data_centroids.csv'
+    if is_test:
+        real_data = pd.read_csv(real_data_file, nrows=10)
+    else:
+        real_data = pd.read_csv(real_data_file)
 
-    print('-'*8, 'analyze spatial validity of real data')
-    pool = Pool(n_jobs)
-    t0 = time.time()
-    tmp_list_orig_pool = pool.map(compute_segment_length_angle, post_traj_list)
-    tmp_list_orig = []
-    for x in tmp_list_orig_pool:
-        if x[0] is not None:
-            tmp_list_orig.append(x)
-    pool.close()
-    print('use time:', time.time() - t0)
+    novelty_score = novelty_score(real_data, data)
+    print('generated Novelty score : {}'.format(novelty_score))
 
-    orig_validity_score = spatial_validity_score_tdrive(tmp_list_orig)
-    print('original spatial validity score : {}'.format(orig_validity_score))
-
-    print('-'*8, 'preprocess and plot one generated traj')
-    one_gen_traj = preprocess_generated_tdrive(data.loc[0, gen_line_col])
-    plot_one_traj(one_gen_traj[:, 0], one_gen_traj[:, 1], doNote=True,
-                  sample_traj_file=f'{data_log_folder}/{data_name}_generated_plot_one_traj.png',
-                  x_range=x_range,
-                  y_range=y_range
-                  )
-
-    print('-' * 8, 'plot and analysis generated traj')
-    plots_tdrive(post_gen_traj_list, data_log_folder=data_log_folder, file_prefix=f'{data_name}_spatial_validity_llm_gen')
-
-    print('-' * 8, 'analyze spatial validity of generated traj')
-    pool = Pool(n_jobs)
-    t0 = time.time()
-    tmp_list_gen_pool = pool.map(compute_segment_length_angle, post_gen_traj_list)
-    tmp_list_gen = []
-    for x in tmp_list_gen_pool:
-        if x[0] is not None:
-            tmp_list_gen.append(x)
-    pool.close()
-    print('use time:', time.time() - t0)
-
-    gen_validity_score = spatial_validity_score_tdrive(tmp_list_gen)
-    print('generated spatial validity score : {}'.format(gen_validity_score))
-
-    print('-'*8, 'analyze the MMD score')
-
-    orig_angles = np.concatenate([x[1] for x in tmp_list_orig], axis=1).reshape(-1, 1)
-    recon_angles = np.concatenate([x[1] for x in tmp_list_gen], axis=1).reshape(-1, 1)
-    distribution_score = MMD(orig_angles[:n_subset], recon_angles[:n_subset])
-    print('angle distribution score: {:.4f}'.format(distribution_score))
-
-    orig_segment_length = np.concatenate([x[0] for x in tmp_list_orig], axis=1).reshape(-1, 1)
-    recon_segment_length = np.concatenate([x[0] for x in tmp_list_gen], axis=1).reshape(-1, 1)
-    distribution_score = MMD(orig_segment_length[:n_subset], recon_segment_length[:n_subset])
-    print('segment length distribution score: {:.4f}'.format(distribution_score))
-
-    orig_total_length = np.array([np.sum(x[0]) for x in tmp_list_orig]).reshape(-1, 1)
-    recon_total_length = np.array([np.sum(x[0]) for x in tmp_list_gen]).reshape(-1, 1)
-    distribution_score = MMD(orig_total_length[:n_subset], recon_total_length[:n_subset])
-    print('total length distribution score: {:.4f}'.format(distribution_score))
-
-    orig_trajs = np.concatenate(post_traj_list, axis=0)
-    recon_trajs = np.concatenate(post_gen_traj_list, axis=0)
-
-    # distribution_score = MMD(orig_trajs, recon_trajs)
-    # print('2d point distribution score: {:.4f}'.format(distribution_score))
-
-    orig_2Dhist = compute_2Dhist_numpy(orig_trajs, x_range, y_range, x_bins_, y_bins_)
-    recon_2Dhist = compute_2Dhist_numpy(recon_trajs, x_range, y_range, x_bins_, y_bins_)
-    distribution_score = MMD(orig_2Dhist, orig_2Dhist)
-    print('2d point histgram distribution score: {:.4f}'.format(distribution_score))
+    # print('-'*8, 'preprocess all generated traj')
+    # pool = Pool(n_jobs)
+    # t0 = time.time()
+    # tmp_list_preprocess_gen = pool.map(preprocess_generated_tdrive, [data.loc[ind, gen_line_col] for ind in range(len(data))])
+    # pool.close()
+    # print('preprocess gen data use time:', time.time() - t0)
+    # post_gen_traj_list = [x for x in tmp_list_preprocess_gen if x.shape[0] > 0]
+    # post_gen_traj_list = random.sample(post_gen_traj_list, n_subset)
+    #
+    # ### plot real traj
+    # print('-'*8, 'plot and analysis real data')
+    # plots_tdrive(post_traj_list, data_log_folder=data_log_folder, file_prefix=f'{data_name}_spatial_validity_real')
+    #
+    # print('-'*8, 'analyze spatial validity of real data')
+    # pool = Pool(n_jobs)
+    # t0 = time.time()
+    # tmp_list_orig_pool = pool.map(compute_segment_length_angle, post_traj_list)
+    # tmp_list_orig = []
+    # for x in tmp_list_orig_pool:
+    #     if x[0] is not None:
+    #         tmp_list_orig.append(x)
+    # pool.close()
+    # print('use time:', time.time() - t0)
+    #
+    # orig_validity_score = spatial_validity_score_tdrive(tmp_list_orig)
+    # print('original spatial validity score : {}'.format(orig_validity_score))
+    #
+    # print('-'*8, 'preprocess and plot one generated traj')
+    # one_gen_traj = preprocess_generated_tdrive(data.loc[0, gen_line_col])
+    # plot_one_traj(one_gen_traj[:, 0], one_gen_traj[:, 1], doNote=True,
+    #               sample_traj_file=f'{data_log_folder}/{data_name}_generated_plot_one_traj.png',
+    #               x_range=x_range,
+    #               y_range=y_range
+    #               )
+    #
+    # print('-' * 8, 'plot and analysis generated traj')
+    # plots_tdrive(post_gen_traj_list, data_log_folder=data_log_folder, file_prefix=f'{data_name}_spatial_validity_llm_gen')
+    #
+    # print('-' * 8, 'analyze spatial validity of generated traj')
+    # pool = Pool(n_jobs)
+    # t0 = time.time()
+    # tmp_list_gen_pool = pool.map(compute_segment_length_angle, post_gen_traj_list)
+    # tmp_list_gen = []
+    # for x in tmp_list_gen_pool:
+    #     if x[0] is not None:
+    #         tmp_list_gen.append(x)
+    # pool.close()
+    # print('use time:', time.time() - t0)
+    #
+    # gen_validity_score = spatial_validity_score_tdrive(tmp_list_gen)
+    # print('generated spatial validity score : {}'.format(gen_validity_score))
+    #
+    # print('-'*8, 'analyze the MMD score')
+    #
+    # orig_angles = np.concatenate([x[1] for x in tmp_list_orig], axis=1).reshape(-1, 1)
+    # recon_angles = np.concatenate([x[1] for x in tmp_list_gen], axis=1).reshape(-1, 1)
+    # distribution_score = MMD(orig_angles[:n_subset], recon_angles[:n_subset])
+    # print('angle distribution score: {:.4f}'.format(distribution_score))
+    #
+    # orig_segment_length = np.concatenate([x[0] for x in tmp_list_orig], axis=1).reshape(-1, 1)
+    # recon_segment_length = np.concatenate([x[0] for x in tmp_list_gen], axis=1).reshape(-1, 1)
+    # distribution_score = MMD(orig_segment_length[:n_subset], recon_segment_length[:n_subset])
+    # print('segment length distribution score: {:.4f}'.format(distribution_score))
+    #
+    # orig_total_length = np.array([np.sum(x[0]) for x in tmp_list_orig]).reshape(-1, 1)
+    # recon_total_length = np.array([np.sum(x[0]) for x in tmp_list_gen]).reshape(-1, 1)
+    # distribution_score = MMD(orig_total_length[:n_subset], recon_total_length[:n_subset])
+    # print('total length distribution score: {:.4f}'.format(distribution_score))
+    #
+    # orig_trajs = np.concatenate(post_traj_list, axis=0)
+    # recon_trajs = np.concatenate(post_gen_traj_list, axis=0)
+    #
+    # # distribution_score = MMD(orig_trajs, recon_trajs)
+    # # print('2d point distribution score: {:.4f}'.format(distribution_score))
+    #
+    # orig_2Dhist = compute_2Dhist_numpy(orig_trajs, x_range, y_range, x_bins_, y_bins_)
+    # recon_2Dhist = compute_2Dhist_numpy(recon_trajs, x_range, y_range, x_bins_, y_bins_)
+    # distribution_score = MMD(orig_2Dhist, orig_2Dhist)
+    # print('2d point histgram distribution score: {:.4f}'.format(distribution_score))
