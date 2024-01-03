@@ -3,6 +3,8 @@ import os.path
 import pickle
 import time
 import random
+import warnings
+warnings.filterwarnings("ignore")
 
 import numpy as np
 import torch
@@ -22,9 +24,43 @@ params_x_max = 155245.71162283162
 params_y_min = -286345.3700102815
 params_y_max = 272791.2253923012
 params_offset = 1000
-angle_thres = 120
+angle_thres = 30
 # precede_segment_thres = 166 / params_scale
 precede_segment_thres = 166
+
+traj_len = 32
+batch_size = 128
+test_batch = 128
+epochs = 100
+eval_epoches = 10
+learning_rate = 0.0002
+f_dim = 256
+z_dim = 64
+encode_dims = [48, 16]
+decode_dims = [128]
+beta = 100.0
+alpha = 1.0
+jit = None
+plot_bound = 0.01
+step = 256
+
+random_sampling = False
+
+### get metrics and plots
+x_min = 0
+x_max = (params_x_max - params_x_min + params_offset) / params_scale
+x_max = int(x_max)
+y_min = 0
+y_max = (params_y_max - params_y_min + params_offset) / params_scale
+y_max = int(y_max)
+x_range = (x_min, x_max)
+y_range = (y_min, y_max)
+
+n_per_bin = 10
+x_bins_ = x_max * n_per_bin
+y_bins_ = y_max * n_per_bin
+x_tick_range = [60 * n_per_bin, 80 * n_per_bin]
+y_tick_range = [440 * n_per_bin, 470 * n_per_bin]
 
 def preprocess_generated_pkdd(line_str):
     crs = "EPSG:4326"
@@ -47,8 +83,8 @@ def preprocess_generated_pkdd(line_str):
     return np.array(post_traj_list)
 
 def postprocess_generated(one_traj):
-    print('***')
-    print(one_traj)
+    # print('***')
+    # print(one_traj)
     one_traj[:, 0] = (one_traj[:, 0] - params_x_min + params_offset) / params_scale
     one_traj[:, 1] = (one_traj[:, 1] - params_y_min + params_offset) / params_scale
     print(one_traj)
@@ -73,7 +109,7 @@ def compute_segment_length_angle(one_traj):
 def spatial_validity_score(tmp_list):
     spatial_validity_mask = []
     for batch_segment_length, batch_angles in tmp_list:
-        mask = (batch_segment_length[:, :-1] > precede_segment_thres) & (batch_angles < angle_thres)
+        mask = ((batch_segment_length[:, :-1] > precede_segment_thres) & (batch_angles < angle_thres)) | (batch_segment_length[:, :-1] > 1000)
         # print(batch_angles)
         # print(mask)
         spatial_validity_mask.extend(list(mask[0]))
@@ -114,25 +150,25 @@ def plots_pkdd_evaluate(post_traj_list, data_log_folder, file_prefix):
     succeeding_segments = np.array(succeeding_segments)
     both_segments = np.array(both_segments)
     angles = np.array(angles)
-    dist_thres, angle_thres = 166, 150 # 60 km
+    dist_thres, angle_thres = 166, 30 # 60 km
     ratio = len(np.where((preceding_segments > dist_thres) \
-                         & (angles > angle_thres))[0]) / len(preceding_segments)
+                         & (angles < angle_thres))[0]) / len(preceding_segments)
     print('''ratio that preceding segments are larger than {}
-          and angle are larger than {} is {}'''.format(dist_thres, angle_thres, ratio))
+          and angle are smaller than {} is {}'''.format(dist_thres, angle_thres, ratio))
     ratio = len(np.where((preceding_segments > dist_thres) & (succeeding_segments > dist_thres) \
-                         & (angles > angle_thres))[0]) / len(preceding_segments)
+                         & (angles < angle_thres))[0]) / len(preceding_segments)
     print('''ratio that preceding and suceeding segments are both larger than {}
-          and angle are larger than {} is {}'''.format(dist_thres, angle_thres, ratio))
+          and angle are smaller than {} is {}'''.format(dist_thres, angle_thres, ratio))
     dist_thres, angle_thres = 111, 150 #  40 km/h
     ratio = len(np.where((preceding_segments > dist_thres) & (succeeding_segments > dist_thres) \
-                         & (angles > angle_thres))[0]) / len(preceding_segments)
+                         & (angles < angle_thres))[0]) / len(preceding_segments)
     print('''ratio that preceding and suceeding segments are both larger than {}
-          and angle are larger than {} is {}'''.format(dist_thres, angle_thres, ratio))
+          and angle are smaller than {} is {}'''.format(dist_thres, angle_thres, ratio))
     dist_thres, angle_thres = 111, 120 # 40 km/h
     ratio = len(np.where((preceding_segments > dist_thres) & (succeeding_segments > dist_thres) \
-                         & (angles > angle_thres))[0]) / len(preceding_segments)
+                         & (angles < angle_thres))[0]) / len(preceding_segments)
     print('''ratio that preceding and suceeding segments are both larger than {}
-          and angle are larger than {} is {}'''.format(dist_thres, angle_thres, ratio))
+          and angle are smaller than {} is {}'''.format(dist_thres, angle_thres, ratio))
 
     print('save validity heatmap to files in:', data_log_folder, file_prefix)
     # preceding angle v.s. angle
@@ -149,16 +185,21 @@ def plots_pkdd_evaluate(post_traj_list, data_log_folder, file_prefix):
     plt.close()
 
     # preceding segment v.s. angle
-    print(np.isnan(angles).sum())
+    nan_filter = np.isnan(angles)
+    print('number of nan value:', nan_filter.sum())
     print(preceding_segments.min(), preceding_segments.max())
-    print(angles.min(), angles.max())
-    h, _, _ = np.histogram2d(preceding_segments, angles, bins=[1500, 360], range=[[0, 1500], [0, 180]])
+    print(angles[~nan_filter].min(), angles[~nan_filter].max())
+    h, _, _ = np.histogram2d(preceding_segments[~nan_filter], angles[~nan_filter], bins=[100, 60], range=[[0, 1000], [0, 180]])
+    print(h.min(), h.max())
     plt.figure(figsize=(4, 3))
-    ax = plt.imshow(h, cmap='Blues')
+    # ax = plt.imshow(h, cmap='Blues')
+    ax = plt.imshow(np.log2(h), cmap='Blues')
     # ax = plt.imshow(np.log10(h), cmap='Blues')
-    plt.xticks([i*60 for i in range(7)], [str(i*30) for i in range(7)])
+    plt.xticks([i*20 for i in range(4)], [str(i*60) for i in range(4)])
     plt.xlabel('Angles')
+    plt.yticks([i * 10 for i in range(1, 11)], [str(i * 100) for i in range(1, 11)])
     plt.ylabel('Preceding segment lengths')
+    plt.ylim([100, 10])
     plt.colorbar(ax)
     plt.tight_layout()
     plt.savefig('{}/_preseding_segment_to_angle_constraint_{}.png'.format(data_log_folder, file_prefix), dpi=120)
@@ -194,20 +235,44 @@ def plots_pkdd_evaluate(post_traj_list, data_log_folder, file_prefix):
     plt.hist(angles, bins=180, range=[0, 180])
     plt.title('after dist-cut angle distribution')
     plt.tight_layout()
-    plt.savefig('{}/_angle_constraint_{}.png'.format(data_log_folder, file_prefix), dpi=120)
+    plt.savefig('{}/_angle_distribution_{}.png'.format(data_log_folder, file_prefix), dpi=120)
     plt.close()
+
+    # 2d point distribution like a map
+    orig_trajs = np.concatenate([postprocess_generated(x) for x in post_traj_list], axis=0)
+    orig_2Dhist = compute_2Dhist_numpy(orig_trajs, x_range, y_range, x_bins_, y_bins_)
+    fig, ax = plt.subplots(1, 1, figsize=(4, 3))
+    im = ax.imshow(np.log10(orig_2Dhist.T), cmap='Blues')
+    # im = ax.imshow(recon_2Dhist.T, cmap='Blues')
+    ax.set_xlabel('X ranged in [{}, {}]'.format(x_range[0], x_range[1]))
+    ax.set_ylabel('Y ranged in [{}, {}]'.format(y_range[0], y_range[1]))
+    ax.set_xlim(x_tick_range)
+    ax.set_ylim(y_tick_range)
+    # ax.set_xticks(x_ticks)
+    # ax.set_xticklabels(x_tick_labels)
+    # ax.set_yticks(y_ticks)
+    # ax.set_yticklabels(y_tick_labels)
+    cbar = ax.figure.colorbar(im, ax=ax, cmap="Blues")
+    cbar.ax.set_ylabel('Counts')
+    plt.tight_layout()
+    file_name = '{}/_2dHistgram_dist_{}.png'.format(data_log_folder, file_prefix)
+    plt.savefig(file_name, dpi=120)
+    plt.close()
+
+    print('2Dhist argmax grid', np.where(orig_2Dhist == orig_2Dhist.max()))
+    print('2Dhist min max', orig_2Dhist.min(), orig_2Dhist.max())
 
 if __name__=="__main__":
 
     n_jobs = 20
-    n_subset = 50000
+    n_subset = 5000
     model_name = 'llm'
     # is_test = True
     is_test = False
     data_name = 'pkdd'
     # data_name = 'tdrive'
-    # data_root = '/Users/lzhang760/Desktop/TrajGen_llm_journal'
-    data_root = '/media/liming/Liming1/TrajGen'
+    data_root = '/Users/lzhang760/Desktop/TrajGen_llm_journal'
+    # data_root = '/media/liming/Liming1/TrajGen'
     data_log_folder = '{}/logs/{}'.format(data_root, data_name)
 
     if not os.path.isdir(data_log_folder):
@@ -240,46 +305,6 @@ if __name__=="__main__":
     ### plot real traj
     print('-'*8, 'plot and analysis real data')
     plots_pkdd_evaluate(post_traj_list, data_log_folder=data_log_folder, file_prefix='pkdd_spatial_validity_real')
-
-    traj_len = 32
-    batch_size = 128
-    test_batch = 128
-    epochs = 100
-    eval_epoches = 10
-    learning_rate = 0.0002
-    f_dim = 256
-    z_dim = 64
-    encode_dims = [48, 16]
-    decode_dims = [128]
-    beta = 100.0
-    alpha = 1.0
-    jit = None
-    plot_bound = 0.01
-    step = 256
-
-    random_sampling = False
-
-    file_prefix = '{}_angle{}_precedSegment{}_{}_'.format(
-        model_name, angle_thres, precede_segment_thres, data_name)
-
-    ### get metrics and plots
-    x_min = 0
-    x_max = (params_x_max - params_x_min + params_offset) / params_scale
-    x_max = int(x_max)
-    y_min = 0
-    y_max = (params_y_max - params_y_min + params_offset) / params_scale
-    y_max = int(y_max)
-    x_range = (x_min, x_max)
-    y_range = (y_min, y_max)
-
-    n_per_bin = 10
-    x_bins_ = x_max * n_per_bin
-    y_bins_ = y_max * n_per_bin
-    x_tick_range = [60 * n_per_bin, 80 * n_per_bin]
-    y_tick_range = [440 * n_per_bin, 470 * n_per_bin]
-
-    print('x_range, y_range, x_bins_, y_bins_', x_range, y_range, x_bins_, y_bins_)
-    save_file = '{}/{}evaluation_journal.bin'.format(data_log_folder, file_prefix)
 
     ### read the other dataset
     print('*' * 10, 'read another generated dataset...')
@@ -375,14 +400,16 @@ if __name__=="__main__":
     # recon_total_length = np.array([np.sum(x[0]) for x in tmp_list_gen]).reshape(-1, 1)
     # distribution_score = MMD(orig_total_length, recon_total_length)
     # print('total length distribution score: {:.4f}'.format(distribution_score))
-    #
+
     # orig_trajs = np.concatenate(post_traj_list, axis=0)
     # recon_trajs = np.concatenate(post_gen_traj_list, axis=0)
-    #
+
     # # distribution_score = MMD(orig_trajs, recon_trajs)
     # # print('2d point distribution score: {:.4f}'.format(distribution_score))
-    #
+
     # orig_2Dhist = compute_2Dhist_numpy(orig_trajs, x_range, y_range, x_bins_, y_bins_)
     # recon_2Dhist = compute_2Dhist_numpy(recon_trajs, x_range, y_range, x_bins_, y_bins_)
     # distribution_score = MMD(orig_2Dhist, orig_2Dhist)
     # print('2d point histgram distribution score: {:.4f}'.format(distribution_score))
+
+
