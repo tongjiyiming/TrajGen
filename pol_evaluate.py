@@ -10,7 +10,7 @@ import pandas as pd
 import geopandas as gpd
 from multiprocessing import Pool
 
-from preprocess import plots_tdrive, plot_one_traj
+from preprocess import *
 from utils import *
 from pkdd_evaluate import novelty_score
 
@@ -25,20 +25,29 @@ params_offset = 0
 angle_thres = 30
 precede_segment_thres = 111 / params_scale
 
-# def preprocess_generated_tdrive(line_str):
-#     print(line_str)
-#     crs = "EPSG:4326"
-#     local_crs = "EPSG:4796"
-#     c = np.array(eval(line_str))
-#     points_gpd = gpd.GeoSeries(gpd.points_from_xy(c[:, 0], c[:, 1]), crs=crs)
-#     points_gpd = points_gpd.to_crs(local_crs)
-#     post_traj_list = [[p.x, p.y] for p in points_gpd]
-#     return np.array(post_traj_list)
+### get metrics and plots
+x_min = 0
+x_max = (params_x_max - params_x_min + params_offset) / params_scale
+x_max = int(x_max)
+y_min = 0
+y_max = (params_y_max - params_y_min + params_offset) / params_scale
+y_max = int(y_max)
+x_range = (x_min, x_max)
+y_range = (y_min, y_max)
 
-def preprocess_generated_gowalla(line_str):
-    one_traj = np.array(eval(line_str))
+n_per_bin = 1
+x_bins_ = x_max * n_per_bin
+y_bins_ = y_max * n_per_bin
+x_tick_range = [0, x_bins_]
+y_tick_range = [0, y_bins_]
+
+def postprocess_generated(one_traj):
     one_traj[:, 0] = (one_traj[:, 0] - params_x_min + params_offset) / params_scale
     one_traj[:, 1] = (one_traj[:, 1] - params_y_min + params_offset) / params_scale
+    return one_traj
+
+def preprocess_generated_pol(line_str):
+    one_traj = np.array(eval(line_str))
     return one_traj
 
 def compute_segment_length_angle(one_traj):
@@ -59,10 +68,40 @@ def spatial_validity_score_tdrive(tmp_list):
     validity_score = len(np.where(spatial_validity_mask)[0]) / len(spatial_validity_mask)
     return validity_score
 
+
+def plots_pol_evaluate(post_traj_list, data_log_folder, file_prefix):
+
+    # 2d point distribution like a map
+    orig_trajs = np.concatenate([postprocess_generated(x) for x in post_traj_list], axis=0)
+    # orig_trajs = np.concatenate(post_traj_list, axis=0)
+    orig_2Dhist = compute_2Dhist_numpy(orig_trajs, x_range, y_range, x_bins_, y_bins_)
+    print(orig_2Dhist.min(), orig_2Dhist.max())
+    fig, ax = plt.subplots(1, 1, figsize=(4, 3))
+    # im = ax.imshow(np.log2(orig_2Dhist.T), cmap='Blues')
+    im = ax.imshow(np.log10(orig_2Dhist.T), cmap='Blues', vmin=0, vmax=3)
+    # im = ax.imshow(orig_2Dhist.T, cmap='Blues', vmin=100, vmax=2000)
+    ax.set_xlabel('X ranged in [{}, {}]'.format(x_range[0], x_range[1]))
+    ax.set_ylabel('Y ranged in [{}, {}]'.format(y_range[0], y_range[1]))
+    ax.set_xlim(x_tick_range)
+    ax.set_ylim(y_tick_range)
+    # ax.set_xticks(x_ticks)
+    # ax.set_xticklabels(x_tick_labels)
+    # ax.set_yticks(y_ticks)
+    # ax.set_yticklabels(y_tick_labels)
+    cbar = ax.figure.colorbar(im, ax=ax, cmap="Blues")
+    cbar.ax.set_ylabel('Counts')
+    plt.tight_layout()
+    file_name = '{}/_2dHistgram_dist_{}.png'.format(data_log_folder, file_prefix)
+    plt.savefig(file_name, dpi=120)
+    plt.close()
+
+    print('2Dhist argmax grid', np.where(orig_2Dhist == orig_2Dhist.max()))
+    print('2Dhist min max', orig_2Dhist.min(), orig_2Dhist.max())
+
 if __name__=="__main__":
 
     n_jobs = 20
-    n_subset = 500
+    n_subset = 50000
     model_name = 'llm'
     # is_test = True
     is_test = False
@@ -88,36 +127,10 @@ if __name__=="__main__":
         print(type(post_traj_list))
         if is_test:
             post_traj_list = post_traj_list[:10]
-        else:
-            post_traj_list = random.sample(post_traj_list, n_subset)
         f.close()
         print('*' * 10, 'load a saved trajectory file: {}'.format(post_traj_file))
         print('original trajectory data\n', len(post_traj_list))
         print(post_traj_list[0][:3, :])
-
-    random_sampling = False
-
-    file_prefix = '{}_angle{}_precedSegment{}_{}_'.format(
-        model_name, angle_thres, precede_segment_thres, data_name)
-
-    ### get metrics and plots
-    x_min = 0
-    x_max = (params_x_max - params_x_min + params_offset) / params_scale
-    x_max = int(x_max)
-    y_min = 0
-    y_max = (params_y_max - params_y_min + params_offset) / params_scale
-    y_max = int(y_max)
-    x_range = (x_min, x_max)
-    y_range = (y_min, y_max)
-
-    n_per_bin = 10
-    x_bins_ = x_max * n_per_bin
-    y_bins_ = y_max * n_per_bin
-    x_tick_range = [60 * n_per_bin, 80 * n_per_bin]
-    y_tick_range = [440 * n_per_bin, 470 * n_per_bin]
-
-    print('x_range, y_range, x_bins_, y_bins_', x_range, y_range, x_bins_, y_bins_)
-    save_file = '{}/{}evaluation_journal.bin'.format(data_log_folder, file_prefix)
 
     ### read the other dataset
     print('*' * 10, 'read another generated dataset...')
@@ -128,34 +141,34 @@ if __name__=="__main__":
         data = pd.read_csv(generated_data_file)
     # data.columns = [x if x != 'centroids' else 'POLYLINE' for x in data.columns]
 
-    print('*' * 10, 'read tokens sequences of real LLM dataset...')
-    real_data_file = f'{data_root}/dataset/{model_name}_{data_name}_data/data_centroids.csv'
-    if is_test:
-        real_data = pd.read_csv(real_data_file, nrows=10)
-    else:
-        real_data = pd.read_csv(real_data_file)
-
-    novelty_score = novelty_score(real_data, data)
-    print('generated Novelty score : {}'.format(novelty_score))
-
-    # print('-'*8, 'preprocess all generated traj')
-    # pool = Pool(n_jobs)
-    # t0 = time.time()
-    # tmp_list_preprocess_gen = pool.map(preprocess_generated_gowalla, [data.loc[ind, gen_line_col] for ind in range(len(data))])
-    # pool.close()
-    # print('preprocess gen data use time:', time.time() - t0)
-    # post_gen_traj_list = [x for x in tmp_list_preprocess_gen if x.shape[0] > 0]
+    # print('*' * 10, 'read tokens sequences of real LLM dataset...')
+    # real_data_file = f'{data_root}/dataset/{model_name}_{data_name}_data/data_centroids.csv'
     # if is_test:
-    #     post_gen_traj_list = post_gen_traj_list[:10]
+    #     real_data = pd.read_csv(real_data_file, nrows=10)
     # else:
-    #     post_gen_traj_list = random.sample(post_gen_traj_list, n_subset)
-    # print('generated trajectory data\n', len(post_gen_traj_list))
-    # print(post_gen_traj_list[0][:3, :])
+    #     real_data = pd.read_csv(real_data_file)
     #
-    # # ### plot real traj
-    # # print('-'*8, 'plot and analysis real data')
-    # # plots_tdrive(post_traj_list, data_log_folder=data_log_folder, file_prefix=f'{data_name}_spatial_validity_real')
-    #
+    # novelty_score = novelty_score(real_data, data)
+    # print('generated Novelty score : {}'.format(novelty_score))
+
+    print('-'*8, 'preprocess all generated traj')
+    pool = Pool(n_jobs)
+    t0 = time.time()
+    tmp_list_preprocess_gen = pool.map(preprocess_generated_pol, [data.loc[ind, gen_line_col] for ind in range(len(data))])
+    pool.close()
+    print('preprocess gen data use time:', time.time() - t0)
+    post_gen_traj_list = [x for x in tmp_list_preprocess_gen if x.shape[0] > 0]
+    if is_test:
+        post_gen_traj_list = post_gen_traj_list[:10]
+    else:
+        post_gen_traj_list = random.sample(post_gen_traj_list, n_subset)
+    print('generated trajectory data\n', len(post_gen_traj_list))
+    print(post_gen_traj_list[0][:3, :])
+
+    ### plot real traj
+    print('-'*8, 'plot and analysis real data')
+    plots_pol_evaluate(post_traj_list, data_log_folder=data_log_folder, file_prefix=f'{data_name}_spatial_validity_real')
+
     # print('-'*8, 'compute length and angles of real data')
     # pool = Pool(n_jobs)
     # t0 = time.time()
@@ -177,10 +190,10 @@ if __name__=="__main__":
     # #               x_range=x_range,
     # #               y_range=y_range
     # #               )
-    # #
-    # # print('-' * 8, 'plot and analysis generated traj')
-    # # plots_tdrive(post_gen_traj_list, data_log_folder=data_log_folder, file_prefix=f'{data_name}_spatial_validity_llm_gen')
-    # #
+
+    print('-' * 8, 'plot and analysis generated traj')
+    plots_pol_evaluate(post_gen_traj_list, data_log_folder=data_log_folder, file_prefix=f'{data_name}_spatial_validity_llm_gen')
+
     # print('-' * 8, 'compute length and angles of generated traj')
     # pool = Pool(n_jobs)
     # t0 = time.time()

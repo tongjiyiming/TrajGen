@@ -83,11 +83,8 @@ def preprocess_generated_pkdd(line_str):
     return np.array(post_traj_list)
 
 def postprocess_generated(one_traj):
-    # print('***')
-    # print(one_traj)
     one_traj[:, 0] = (one_traj[:, 0] - params_x_min + params_offset) / params_scale
     one_traj[:, 1] = (one_traj[:, 1] - params_y_min + params_offset) / params_scale
-    print(one_traj)
     return one_traj
 
 def compute_segment_length_angle(one_traj):
@@ -242,7 +239,8 @@ def plots_pkdd_evaluate(post_traj_list, data_log_folder, file_prefix):
     orig_trajs = np.concatenate([postprocess_generated(x) for x in post_traj_list], axis=0)
     orig_2Dhist = compute_2Dhist_numpy(orig_trajs, x_range, y_range, x_bins_, y_bins_)
     fig, ax = plt.subplots(1, 1, figsize=(4, 3))
-    im = ax.imshow(np.log10(orig_2Dhist.T), cmap='Blues')
+    im = ax.imshow(np.log2(orig_2Dhist.T), cmap='Blues')
+    # im = ax.imshow(np.log10(orig_2Dhist.T), cmap='Blues')
     # im = ax.imshow(recon_2Dhist.T, cmap='Blues')
     ax.set_xlabel('X ranged in [{}, {}]'.format(x_range[0], x_range[1]))
     ax.set_ylabel('Y ranged in [{}, {}]'.format(y_range[0], y_range[1]))
@@ -265,14 +263,14 @@ def plots_pkdd_evaluate(post_traj_list, data_log_folder, file_prefix):
 if __name__=="__main__":
 
     n_jobs = 20
-    n_subset = 5000
+    n_subset = 50000
     model_name = 'llm'
     # is_test = True
     is_test = False
     data_name = 'pkdd'
     # data_name = 'tdrive'
-    data_root = '/Users/lzhang760/Desktop/TrajGen_llm_journal'
-    # data_root = '/media/liming/Liming1/TrajGen'
+    # data_root = '/Users/lzhang760/Desktop/TrajGen_llm_journal'
+    data_root = '/media/liming/Liming1/TrajGen'
     data_log_folder = '{}/logs/{}'.format(data_root, data_name)
 
     if not os.path.isdir(data_log_folder):
