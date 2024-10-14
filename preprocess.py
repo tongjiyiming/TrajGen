@@ -488,9 +488,9 @@ if __name__ == "__main__":
 
     crs = "EPSG:4326"
 
-    data_name = 'pkdd'
+    # data_name = 'pkdd'
     # data_name = 'tdrive'
-    # data_name = 'pol'
+    data_name = 'pol'
     # data_name = 'gowalla'
 
     if data_name == 'pkdd':
@@ -833,7 +833,7 @@ if __name__ == "__main__":
             with open(test_traj_file, 'rb') as f:
                 test_traj_list = pickle.load(f)
                 f.close()
-            with open(post_traj_file, 'wb') as f:
+            with open(post_traj_file, 'rb') as f:
                 used_traj_list = pickle.load(f)
                 f.close()
     elif data_name == 'gowalla':
